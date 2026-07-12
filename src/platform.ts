@@ -5,6 +5,7 @@ import axios = require('axios');
 //import { BasePlatformAccessory } from './basePlatformAccessory';
 import { MultiServiceAccessory } from './multiServiceAccessory';
 import { SubscriptionHandler } from './webhook/subscriptionHandler';
+import { findMatchingDeviceIgnoreRule } from './deviceFilter';
 
 /**
  * HomebridgePlatform
@@ -114,6 +115,10 @@ export class IKHomeBridgeHomebridgePlatform implements DynamicPlatformPlugin {
 
       this.axInstance.get(command).then((res) => {
         res.data.items.forEach((device) => {
+          if (this.config.LogDeviceData) {
+            this.log.info(`SMARTTHINGS DEVICE DATA: ${JSON.stringify(device)}`);
+          }
+
           // If an apostrophe is included in the name of the device in SmartThings, it comes over as a Right Single
           // quote which will not match with a single quote in the config.  This replaces it so it will match
           if (!device.label) {
@@ -131,6 +136,12 @@ export class IKHomeBridgeHomebridgePlatform implements DynamicPlatformPlugin {
           //this.config.IgnoreDevices.find(d => d.replaceAll(String.fromCharCode(8217), '\'').toLowerCase() === deviceName.toLowerCase())) {
             this.config.IgnoreDevices.find(d => d.toLowerCase() === deviceName.toLowerCase())) {
             this.log.info(`Ignoring ${device.label} because it is in the Ignore Devices list`);
+            return;
+          }
+
+          const matchingIgnoreRule = findMatchingDeviceIgnoreRule(device, this.config.IgnoreDeviceRules);
+          if (matchingIgnoreRule) {
+            this.log.info(`Ignoring ${device.label} because it matches Ignore Device Rule ${JSON.stringify(matchingIgnoreRule)}`);
             return;
           }
 
@@ -273,4 +284,3 @@ export class IKHomeBridgeHomebridgePlatform implements DynamicPlatformPlugin {
     return acc;
   }
 }
-
