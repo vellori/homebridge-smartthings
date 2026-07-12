@@ -99,6 +99,56 @@
           "title": "Device Name",
           "type": "string"
         }
+      },
+      "IgnoreDeviceRules": {
+        "title": "Device Ignore Rules",
+        "description": "Ignore devices by SmartThings metadata. Use * for any characters and ? for one character. All fields in a rule must match; a device is ignored when any rule matches.",
+        "type": "array",
+        "items": {
+          "title": "Ignore Rule",
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "title": "Device Label",
+              "description": "The user-visible SmartThings device name, for example Hue *",
+              "type": "string"
+            },
+            "name": {
+              "title": "Integration Device Name",
+              "description": "The name assigned by the device integration",
+              "type": "string"
+            },
+            "manufacturerName": {
+              "title": "Manufacturer",
+              "description": "For example Signify* or *Hue*",
+              "type": "string"
+            },
+            "type": {
+              "title": "Integration Type",
+              "description": "For example ENDPOINT_APP for devices supplied by linked cloud integrations",
+              "type": "string"
+            },
+            "installedAppId": {
+              "title": "Installed App ID",
+              "description": "The installedAppId shared by devices from one linked SmartThings integration",
+              "type": "string"
+            },
+            "deviceId": {
+              "title": "Device ID",
+              "description": "The unique SmartThings device ID",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "LogDeviceData": {
+        "title": "Log SmartThings Device Data",
+        "description": "Temporarily log the metadata returned for every SmartThings device. Use this to identify values for Device Ignore Rules, then disable it.",
+        "type": "boolean",
+        "required": false,
+        "default": false
       }
     }
   },
