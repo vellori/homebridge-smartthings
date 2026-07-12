@@ -8,6 +8,9 @@ type DeviceStatus = {
   //status: Record<string, unknown>;
   status: any;
 };
+
+const STATUS_CACHE_MS = 10000;
+const HOMEKIT_READ_WAIT_MS = 2000;
 /**
  * Platform Accessory
  * An instance of this class is created for each accessory your platform registers
@@ -41,6 +44,7 @@ export abstract class BasePlatformAccessory {
   protected lastCommandCompleted = 0;
 
   protected statusQueryInProgress = false;
+  protected healthCheckInProgress = false;
   protected lastStatusResult = true;
 
   get id() {
@@ -58,12 +62,7 @@ export abstract class BasePlatformAccessory {
     this.baseURL = platform.config.BaseURL;
     this.key = platform.config.AccessToken;
     this.api = platform.api;
-    const headerDict = { 'Authorization': 'Bearer: ' + this.key };
-
-    this.axInstance = axios.default.create({
-      baseURL: this.baseURL,
-      headers: headerDict,
-    });
+    this.axInstance = platform.smartThingsClient;
 
     this.commandURL = 'devices/' + accessory.context.device.deviceId + '/commands';
     this.statusURL = 'devices/' + accessory.context.device.deviceId + '/status';
@@ -76,15 +75,8 @@ export abstract class BasePlatformAccessory {
       .setCharacteristic(platform.Characteristic.Model, 'Default-Model')
       .setCharacteristic(platform.Characteristic.SerialNumber, 'Default-Serial');
 
-    // // Find out if we are online
-    this.axInstance.get(this.healthURL)
-      .then(res => {
-        if (res.data.state === 'ONLINE') {
-          this.online = true;
-        } else {
-          this.online = false;
-        }
-      });
+    // Begin optimistically online. Status polling establishes availability without issuing
+    // a startup health request for every device at once.
     // if (this.name === 'Test Lock') {
     //   platform.subscriptionHandler.addSubscription(this);
     // }
@@ -97,49 +89,45 @@ export abstract class BasePlatformAccessory {
   // 4 seconds since last refresh
   //
   protected async refreshStatus(): Promise<boolean> {
-    return new Promise((resolve) => {
-      this.log.debug(`Refreshing status for ${this.name} - current timestamp is ${this.deviceStatus.timestamp}`);
-      if ((this.deviceStatus.status === undefined) || (Date.now() - this.deviceStatus.timestamp > 5000)) {
-        // If there is already a call to smartthings to update status for this device, don't issue another one until
-        // we return from that.
-        if (this.statusQueryInProgress){
-          this.log.debug(`Status query already in progress for ${this.name}.  Waiting...`);
-          this.waitFor(() => !this.statusQueryInProgress).then(() => resolve(this.lastStatusResult));
-          return;
-        }
-        this.log.debug(`Calling Smartthings to get an update for ${this.name}`);
-        this.statusQueryInProgress = true;
-        this.failureCount = 0;
-        this.waitFor(() => this.commandInProgress === false).then(() => {
-          this.lastStatusResult = true;
-          this.axInstance.get(this.statusURL).then((res) => {
-            if (res.data.components.main !== undefined) {
-              this.deviceStatus.status = res.data.components.main;
-              this.deviceStatus.timestamp = Date.now();
-              this.log.debug(`Updated status for ${this.name}: ${JSON.stringify(this.deviceStatus.status)}`);
-              this.statusQueryInProgress = false;
-              resolve(true);
-            } else {
-              this.log.debug(`No status returned for ${this.name}`);
-              this.statusQueryInProgress = false;
-              resolve(this.lastStatusResult = false);
-            }
-          }).catch(error => {
-            this.failureCount++;
-            this.log.error(`Failed to request status from ${this.name}: ${error}.  This is failure number ${this.failureCount}`);
-            if (this.failureCount >= 5) {
-              this.log.error(`Exceeded allowed failures for ${this.name}.  Device is offline`);
-              this.giveUpTime = Date.now();
-              this.online = false;
-            }
-            this.statusQueryInProgress = false;
-            resolve(this.lastStatusResult = false);
-          });
-        });
-      } else {
-        resolve(true);
+    if (this.deviceStatus.status !== undefined && Date.now() - this.deviceStatus.timestamp <= STATUS_CACHE_MS) {
+      return true;
+    }
+    if (!this.statusQueryInProgress) {
+      this.statusQueryInProgress = true;
+      void this.performStatusRefresh();
+    }
+
+    const completed = await this.waitFor(() => !this.statusQueryInProgress, HOMEKIT_READ_WAIT_MS);
+    return completed ? this.lastStatusResult : false;
+  }
+
+  private async performStatusRefresh(): Promise<void> {
+    try {
+      if (!await this.waitFor(() => !this.commandInProgress)) {
+        this.lastStatusResult = false;
+        return;
       }
-    });
+      const res = await this.axInstance.get(this.statusURL);
+      if (res.data.components.main === undefined) {
+        this.lastStatusResult = false;
+        return;
+      }
+      this.deviceStatus.status = res.data.components.main;
+      this.deviceStatus.timestamp = Date.now();
+      this.failureCount = 0;
+      this.online = true;
+      this.lastStatusResult = true;
+    } catch (error) {
+      this.failureCount++;
+      this.log.error(`Failed to request status from ${this.name}: ${error}. This is failure number ${this.failureCount}`);
+      if (this.failureCount >= 5 && this.online) {
+        this.giveUpTime = Date.now();
+        this.online = false;
+      }
+      this.lastStatusResult = false;
+    } finally {
+      this.statusQueryInProgress = false;
+    }
   }
 
   protected startPollingState(pollSeconds: number, getValue: () => Promise<CharacteristicValue>, service: Service,
@@ -176,7 +164,8 @@ export abstract class BasePlatformAccessory {
           }
         } else {
           // If we failed this accessory due to errors. Reset the failure count and online status after 10 minutes.
-          if (this.giveUpTime > 0 && (Date.now() - this.giveUpTime > (10 * 60 * 1000))) {
+          if (!this.healthCheckInProgress && this.giveUpTime > 0 && (Date.now() - this.giveUpTime > (10 * 60 * 1000))) {
+            this.healthCheckInProgress = true;
             this.axInstance.get(this.healthURL)
               .then(res => {
                 if (res.data.state === 'ONLINE') {
@@ -184,10 +173,12 @@ export abstract class BasePlatformAccessory {
                   this.giveUpTime = 0;
                   this.failureCount = 0;
                 }
-              });
+              })
+              .catch(error => this.log.warn(`Could not recheck health for ${this.name}: ${error}`))
+              .finally(() => this.healthCheckInProgress = false);
           }
         }
-      }, pollSeconds * 1000);
+      }, pollSeconds * 1000 + Math.floor(Math.random() * pollSeconds * 1000));
     }
   }
 
@@ -209,44 +200,41 @@ export abstract class BasePlatformAccessory {
     }
 
     const commandBody = JSON.stringify([cmd]);
-    return new Promise((resolve) => {
-      this.waitFor(() => !this.commandInProgress).then(() => {
-        this.commandInProgress = true;
-        this.axInstance.post(this.commandURL, commandBody).then(() => {
-          this.log.debug(`${command} successful for ${this.name}`);
-          this.deviceStatus.timestamp = 0; // Force a refresh on next poll after a state change
-          this.commandInProgress = false;
-          resolve(true);
-          // Force a small delay so that status fetch is correct
-          // setTimeout(() => {
-          //   this.log.debug(`Delay complete for ${this.name}`);
-          //   this.commandInProgress = false;
-          //   resolve(true);
-          // }, 1500);
-        }).catch((error) => {
-          this.commandInProgress = false;
-          this.log.error(`${command} failed for ${this.name}: ${error}`);
-          resolve(false);
-        });
-      });
-    });
+    if (!await this.waitFor(() => !this.commandInProgress)) {
+      return false;
+    }
+    this.commandInProgress = true;
+    try {
+      await this.axInstance.post(this.commandURL, commandBody);
+      this.deviceStatus.timestamp = 0;
+      return true;
+    } catch (error) {
+      this.log.error(`${command} failed for ${this.name}: ${error}`);
+      return false;
+    } finally {
+      this.commandInProgress = false;
+      this.lastCommandCompleted = Date.now();
+    }
   }
 
   // Wait for the condition to be true.  Will check every 500 ms
-  private async waitFor(condition: () => boolean): Promise<void> {
+  private async waitFor(condition: () => boolean, timeoutMs = 15000): Promise<boolean> {
     if (condition()) {
-      return;
+      return true;
     }
 
     this.log.debug(`${this.name} command or request is waiting...`);
     return new Promise(resolve => {
+      const started = Date.now();
       const interval = setInterval(() => {
         if (condition()) {
           this.log.debug(`${this.name} command or request is proceeding.`);
           clearInterval(interval);
-          resolve();
+          resolve(true);
+        } else if (Date.now() - started >= timeoutMs) {
+          clearInterval(interval);
+          resolve(false);
         }
-        this.log.debug(`${this.name} still waiting...`);
       }, 250);
     });
   }

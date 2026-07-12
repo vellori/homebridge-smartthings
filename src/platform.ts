@@ -6,6 +6,8 @@ import axios = require('axios');
 import { MultiServiceAccessory } from './multiServiceAccessory';
 import { SubscriptionHandler } from './webhook/subscriptionHandler';
 import { findMatchingDeviceIgnoreRule } from './deviceFilter';
+import { createSmartThingsClient, isTransientNetworkError } from './smartThingsClient';
+import { wait } from './keyValues';
 
 /**
  * HomebridgePlatform
@@ -22,14 +24,7 @@ export class IKHomeBridgeHomebridgePlatform implements DynamicPlatformPlugin {
   private locationIDsToIgnore: string[] = [];
   private roomsIDsToIgnore: string[] = [];
 
-  private headerDict = {
-    'Authorization': 'Bearer: ' + this.config.AccessToken,
-  };
-
-  private axInstance = axios.default.create({
-    baseURL: this.config.BaseURL,
-    headers: this.headerDict,
-  });
+  public readonly smartThingsClient: axios.AxiosInstance;
 
   private accessoryObjects: MultiServiceAccessory[] = [];
   private subscriptionHandler: SubscriptionHandler | undefined = undefined;
@@ -39,6 +34,7 @@ export class IKHomeBridgeHomebridgePlatform implements DynamicPlatformPlugin {
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
+    this.smartThingsClient = createSmartThingsClient(this.config, this.log);
     this.log.debug('Finished initializing platform:', this.config.name);
 
     // When this event is fired it means Homebridge has restored all cached accessories from disk.
@@ -58,7 +54,7 @@ export class IKHomeBridgeHomebridgePlatform implements DynamicPlatformPlugin {
       }
 
 
-      this.getOnlineDevices().then((devices) => {
+      this.getOnlineDevicesWithRetry().then((devices) => {
         if (this.config.UnregisterAll) {
           this.unregisterDevices(devices, true);
         }
@@ -90,7 +86,7 @@ export class IKHomeBridgeHomebridgePlatform implements DynamicPlatformPlugin {
   getLocationsToIgnore(): Promise<boolean> {
     this.log.info('Loading locations for exclusion');
     return new Promise((resolve) => {
-      this.axInstance.get('locations').then(res => {
+      this.smartThingsClient.get('locations').then(res => {
         res.data.items.forEach(location => {
           if (this.config.IgnoreLocations.find(l => l.toLowerCase() === location.name.toLowerCase())) {
             this.locationIDsToIgnore.push(location.locationId);
@@ -113,7 +109,7 @@ export class IKHomeBridgeHomebridgePlatform implements DynamicPlatformPlugin {
 
     return new Promise<Array<object>>((resolve, reject) => {
 
-      this.axInstance.get(command).then((res) => {
+      this.smartThingsClient.get(command).then((res) => {
         res.data.items.forEach((device) => {
           if (this.config.LogDeviceData) {
             this.log.info(`SMARTTHINGS DEVICE DATA: ${JSON.stringify(device)}`);
@@ -156,9 +152,26 @@ export class IKHomeBridgeHomebridgePlatform implements DynamicPlatformPlugin {
         resolve(devices);
       }).catch(error => {
         this.log.error('Error getting devices from Smartthings: ' + error);
-        reject();
+        reject(error);
       });
     });
+  }
+
+  private async getOnlineDevicesWithRetry(): Promise<Array<object>> {
+    const attempts = 5;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        return await this.getOnlineDevices();
+      } catch (error) {
+        if (!isTransientNetworkError(error) || attempt === attempts) {
+          throw error;
+        }
+        const delaySeconds = Math.pow(2, attempt);
+        this.log.warn(`Device discovery failed temporarily; retrying in ${delaySeconds} seconds (${attempt}/${attempts})`);
+        await wait(delaySeconds);
+      }
+    }
+    return [];
   }
 
   unregisterDevices(devices, all = false) {

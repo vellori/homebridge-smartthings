@@ -241,13 +241,15 @@ This section should be added to the platforms array in your config.json file, bu
         {
             "Name": "Smartthings Plugin",
             "AccessToken": "INSERT YOUR PERSONAL ACCESS TOKEN HERE",
-            "WebhookToken: "INSERT WEBHOOK TOKEN HERE",
+            "WebhookToken": "INSERT WEBHOOK TOKEN HERE",
             "BaseURL": "https://api.smartthings.com/v1",
+            "NetworkTimeoutSeconds": 10,
+            "MaxConcurrentRequests": 3,
             "GarageDoorMaxPoll": 40,
             "PollLocksSeconds": 15,
             "PollDoorsSeconds": 15,
             "PollSensorsSeconds": 5,
-            "PollSwitchesAndLightsSeconds": 15
+            "PollSwitchesAndLightsSeconds": 15,
             "platform": "HomeBridgeSmartThings",
             "IgnoreLocations": [
                  "My location 1",
@@ -272,6 +274,8 @@ The optional "IgnoreDeviceRules" array can exclude groups of devices using metad
 For example, a Hue integration may report its manufacturer code as Signify, so `{ "deviceManufacturerCode": "Signify*" }` ignores those devices even when their labels do not contain "Hue". Check the plugin's `DEVICE DATA` log to confirm the value returned for your devices. To target one linked integration more precisely, use its shared `app.installedAppId` or `viper.endpointAppId` value as `{ "installedAppId": "..." }` or `{ "endpointAppId": "..." }`. To ignore every device supplied by a linked cloud SmartApp, use `{ "type": "ENDPOINT_APP" }`; this is intentionally broad and may exclude non-Hue integrations as well.
 
 Existing exact-name entries in "IgnoreDevices" continue to work as before. Devices excluded by either option are also removed from Homebridge's accessory cache on the next restart.
+
+`NetworkTimeoutSeconds` and `MaxConcurrentRequests` are optional stability controls and can also be edited in the Homebridge UI. Their defaults are 10 seconds and three concurrent requests. The plugin additionally paces SmartThings traffic, honors `Retry-After` after rate limiting, and applies exponential backoff to temporary network and server failures. Commands are not automatically retried because repeating a lock, door, or switch command after an ambiguous response may be unsafe.
 
 To find the metadata for your devices, temporarily set `"LogDeviceData": true` and restart Homebridge. Each device will be written to the normal Homebridge log with the prefix `SMARTTHINGS DEVICE DATA`. Device data is logged before ignore rules are applied, so excluded devices are included too. Look for the Hue device's `manufacturerName`, `type`, and `app.installedAppId`, configure the narrowest rule shared by the devices you want to exclude, and then set `LogDeviceData` back to `false` because the output includes device identifiers and can be verbose.
 

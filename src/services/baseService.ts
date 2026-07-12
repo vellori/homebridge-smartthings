@@ -64,8 +64,9 @@ export class BaseService {
 
     return new Promise((resolve) => {
       if (!this.multiServiceAccessory.isOnline()) {
-        this.log.info(`${this.name} is offline`);
+        this.log.debug(`${this.name} is offline`);
         resolve(false);
+        return;
       }
       this.multiServiceAccessory.refreshStatus()
         .then(success => {
@@ -74,6 +75,10 @@ export class BaseService {
           } else {
             resolve(true);
           }
+        })
+        .catch(error => {
+          this.log.warn(`Could not refresh ${this.name}: ${error}`);
+          resolve(false);
         });
     });
   }

@@ -45,8 +45,12 @@ export class ThermostatService extends BaseService {
 
     // set targets
 
-    this.getCurrentHeatingCoolingState().then((value) => this.targetHeatingCoolingState = value);
-    this.getCurrentTemperature().then((value) => this.targetTemperature = value as number);
+    this.getCurrentHeatingCoolingState()
+      .then((value) => this.targetHeatingCoolingState = value)
+      .catch(error => this.log.warn(`Could not initialize thermostat state for ${this.name}: ${error}`));
+    this.getCurrentTemperature()
+      .then((value) => this.targetTemperature = value as number)
+      .catch(error => this.log.warn(`Could not initialize thermostat temperature for ${this.name}: ${error}`));
 
     let pollSensors = 10; // default to 10 seconds
     if (this.platform.config.PollSensorsSeconds !== undefined) {

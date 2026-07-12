@@ -29,6 +29,24 @@
         "required": false,
         "default": ""
       },
+      "NetworkTimeoutSeconds": {
+        "title": "SmartThings Request Timeout",
+        "description": "Maximum time in seconds for a SmartThings API request before it is safely cancelled.",
+        "type": "integer",
+        "required": false,
+        "minimum": 1,
+        "maximum": 120,
+        "default": 10
+      },
+      "MaxConcurrentRequests": {
+        "title": "Maximum Concurrent SmartThings Requests",
+        "description": "Limits simultaneous SmartThings API calls to reduce rate limiting.",
+        "type": "integer",
+        "required": false,
+        "minimum": 1,
+        "maximum": 10,
+        "default": 3
+      },
 
       "GarageDoorMaxPoll": {
         "title": "Garage Door Max Poll",
