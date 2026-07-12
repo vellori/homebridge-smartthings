@@ -1,16 +1,16 @@
 {
   "private": false,
-  "displayName": "SmartThings Plugin",
-  "name": "homebridge-smartthings-ik",
+  "displayName": "SmerdThings Plugin",
+  "name": "homebridge-smerdthings",
   "version": "1.5.22",
   "description": "Connects SmartThings devices to Homebridge.  Automatically discovers devices.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/iklein99/homebridge-smartthings.git"
+    "url": "https://github.com/vellori/homebridge-smartthings.git"
   },
   "bugs": {
-    "url": "https://github.com/iklein99/homebridge-smartthings/issues"
+    "url": "https://github.com/vellori/homebridge-smartthings/issues"
   },
   "engines": {
     "node": ">=18.0.0",

@@ -7,7 +7,10 @@
 
 [![verified-by-homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
 
-# Smartthings Homebridge Plugin 
+# SmerdThings Homebridge Plugin
+
+This personal fork installs from GitHub as `homebridge-smerdthings` while retaining the original `HomeBridgeSmartThings`
+platform name, so existing Homebridge configuration can be reused unchanged.
 
 This is a smartthings plugin for Homebridge.  This requires no access to the legacy smartthings app, and doesn't
 require a lot of work to install.  It will discover devices automatically as well as unregister devices that are removed
