@@ -170,7 +170,9 @@ export abstract class BasePlatformAccessory {
           // Update target if we have to
           if (targetStateCharacteristic && getTargetState) {
             //service.updateCharacteristic(targetStateCharacteristic, getTargetState());
-            getTargetState().then(value => service.updateCharacteristic(targetStateCharacteristic, value));
+            getTargetState()
+              .then(value => service.updateCharacteristic(targetStateCharacteristic, value))
+              .catch(() => this.log.warn(`Poll failure on target state for ${this.name}`));
           }
         } else {
           // If we failed this accessory due to errors. Reset the failure count and online status after 10 minutes.
