@@ -8,9 +8,13 @@ const hueDevice = {
   label: 'Kitchen ceiling',
   name: 'Hue color lamp',
   manufacturerName: 'Signify Netherlands B.V.',
+  deviceManufacturerCode: 'Signify Netherlands B.V.',
   type: 'ENDPOINT_APP',
   app: {
     installedAppId: 'hue-installed-app-id',
+  },
+  viper: {
+    endpointAppId: 'hue-endpoint-app-id',
   },
 };
 
@@ -32,6 +36,18 @@ describe('findMatchingDeviceIgnoreRule', () => {
     const rule = { installedAppId: 'hue-installed-app-id' };
 
     assert.equal(findMatchingDeviceIgnoreRule(hueDevice, [rule]), rule);
+  });
+
+  it('matches a VIPER endpoint app without excluding other VIPER integrations', () => {
+    const rule = { endpointAppId: 'hue-endpoint-app-id' };
+    const yaleDevice = {
+      ...hueDevice,
+      label: 'Unrelated cloud device',
+      viper: { endpointAppId: 'yale-endpoint-app-id' },
+    };
+
+    assert.equal(findMatchingDeviceIgnoreRule(hueDevice, [rule]), rule);
+    assert.equal(findMatchingDeviceIgnoreRule(yaleDevice, [rule]), undefined);
   });
 
   it('supports single-character wildcards and escapes regular-expression characters', () => {

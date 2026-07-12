@@ -125,6 +125,11 @@
               "description": "For example Signify* or *Hue*",
               "type": "string"
             },
+            "deviceManufacturerCode": {
+              "title": "Device Manufacturer Code",
+              "description": "The manufacturer code reported by SmartThings, for example Signify*",
+              "type": "string"
+            },
             "type": {
               "title": "Integration Type",
               "description": "For example ENDPOINT_APP for devices supplied by linked cloud integrations",
@@ -133,6 +138,11 @@
             "installedAppId": {
               "title": "Installed App ID",
               "description": "The installedAppId shared by devices from one linked SmartThings integration",
+              "type": "string"
+            },
+            "endpointAppId": {
+              "title": "Endpoint App ID",
+              "description": "The endpointAppId shared by devices from one SmartThings VIPER integration",
               "type": "string"
             },
             "deviceId": {

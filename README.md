@@ -259,7 +259,7 @@ This section should be added to the platforms array in your config.json file, bu
             ],
             "IgnoreDeviceRules": [
                 {
-                    "manufacturerName": "Signify*"
+                    "deviceManufacturerCode": "Signify*"
                 }
             ],
             "LogDeviceData": false
@@ -267,9 +267,9 @@ This section should be added to the platforms array in your config.json file, bu
 </pre>
 The "IgnoreLocations" array may be omitted.  This array can be used to specify location names, as confogured in the Smartthings app.  All of the devices in these locations will be ignored and not added to Homebridge.  If you add any IgnoreLocations after you had previously started Homebridge with this plugin, those devices will be removed.  You may remove this section to have them added back in.  IMPORTANT: your API token must have the "r:locations" permission in order to ignore locations.<br>
 
-The optional "IgnoreDeviceRules" array can exclude groups of devices using metadata returned by SmartThings. Rules support `*` (any number of characters) and `?` (one character), and matching is case-insensitive. All fields in one rule must match; separate rules are alternatives. Supported fields are `label`, `name`, `manufacturerName`, `type`, `installedAppId`, and `deviceId`.
+The optional "IgnoreDeviceRules" array can exclude groups of devices using metadata returned by SmartThings. Rules support `*` (any number of characters) and `?` (one character), and matching is case-insensitive. All fields in one rule must match; separate rules are alternatives. Supported fields are `label`, `name`, `manufacturerName`, `deviceManufacturerCode`, `type`, `installedAppId`, `endpointAppId`, and `deviceId`.
 
-For example, a Hue integration may report its manufacturer as Signify, so `{ "manufacturerName": "Signify*" }` ignores those devices even when their labels do not contain "Hue". Check the plugin's `DEVICE DATA` debug log to confirm the value returned for your devices. To target one linked integration more precisely, use its shared `app.installedAppId` value as `{ "installedAppId": "..." }`. To ignore every device supplied by a linked cloud SmartApp, use `{ "type": "ENDPOINT_APP" }`; this is intentionally broad and may exclude non-Hue integrations as well.
+For example, a Hue integration may report its manufacturer code as Signify, so `{ "deviceManufacturerCode": "Signify*" }` ignores those devices even when their labels do not contain "Hue". Check the plugin's `DEVICE DATA` log to confirm the value returned for your devices. To target one linked integration more precisely, use its shared `app.installedAppId` or `viper.endpointAppId` value as `{ "installedAppId": "..." }` or `{ "endpointAppId": "..." }`. To ignore every device supplied by a linked cloud SmartApp, use `{ "type": "ENDPOINT_APP" }`; this is intentionally broad and may exclude non-Hue integrations as well.
 
 Existing exact-name entries in "IgnoreDevices" continue to work as before. Devices excluded by either option are also removed from Homebridge's accessory cache on the next restart.
 

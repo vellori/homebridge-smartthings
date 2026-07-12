@@ -3,8 +3,10 @@ export interface DeviceIgnoreRule {
   label?: string;
   name?: string;
   manufacturerName?: string;
+  deviceManufacturerCode?: string;
   type?: string;
   installedAppId?: string;
+  endpointAppId?: string;
 }
 
 interface SmartThingsDevice {
@@ -12,9 +14,13 @@ interface SmartThingsDevice {
   label?: unknown;
   name?: unknown;
   manufacturerName?: unknown;
+  deviceManufacturerCode?: unknown;
   type?: unknown;
   app?: {
     installedAppId?: unknown;
+  };
+  viper?: {
+    endpointAppId?: unknown;
   };
 }
 
@@ -23,13 +29,19 @@ const ruleFields: Array<keyof DeviceIgnoreRule> = [
   'label',
   'name',
   'manufacturerName',
+  'deviceManufacturerCode',
   'type',
   'installedAppId',
+  'endpointAppId',
 ];
 
 function deviceField(device: SmartThingsDevice, field: keyof DeviceIgnoreRule): unknown {
   if (field === 'installedAppId') {
     return device.app?.installedAppId;
+  }
+
+  if (field === 'endpointAppId') {
+    return device.viper?.endpointAppId;
   }
 
   return device[field];
