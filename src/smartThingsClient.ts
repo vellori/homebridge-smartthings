@@ -5,6 +5,14 @@ const DEFAULT_TIMEOUT_MS = 10000;
 const DEFAULT_MAX_CONCURRENT_REQUESTS = 3;
 const MINIMUM_REQUEST_INTERVAL_MS = 250;
 const MAX_BACKOFF_MS = 60000;
+const MAX_RATE_LIMIT_BACKOFF_MS = 15 * 60 * 1000;
+
+export class SmartThingsBackoffError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SmartThingsBackoffError';
+  }
+}
 
 export function retryAfterMilliseconds(value: unknown, now = Date.now()): number | undefined {
   if (typeof value !== 'string' && typeof value !== 'number') {
@@ -20,7 +28,19 @@ export function retryAfterMilliseconds(value: unknown, now = Date.now()): number
   return Number.isNaN(date) ? undefined : Math.max(0, date - now);
 }
 
+/** SmartThings PAT responses report x-ratelimit-reset as milliseconds until reset. */
+export function rateLimitResetMilliseconds(value: unknown): number | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    return undefined;
+  }
+  const milliseconds = Number(value);
+  return Number.isFinite(milliseconds) ? Math.max(0, milliseconds) : undefined;
+}
+
 export function isTransientNetworkError(error: unknown): boolean {
+  if (error instanceof SmartThingsBackoffError) {
+    return true;
+  }
   if (!axios.default.isAxiosError(error)) {
     return false;
   }
@@ -73,7 +93,7 @@ export class SmartThingsRequestCoordinator {
 
   private async acquire(): Promise<void> {
     if (this.blockedUntil > Date.now()) {
-      throw new Error(`SmartThings API requests are paused for ${Math.ceil((this.blockedUntil - Date.now()) / 1000)} seconds`);
+      throw this.backoffError();
     }
 
     const dispatchAt = Math.max(Date.now(), this.nextRequestAt);
@@ -82,7 +102,7 @@ export class SmartThingsRequestCoordinator {
       await new Promise(resolve => setTimeout(resolve, dispatchAt - Date.now()));
     }
     if (this.blockedUntil > Date.now()) {
-      throw new Error(`SmartThings API requests are paused for ${Math.ceil((this.blockedUntil - Date.now()) / 1000)} seconds`);
+      throw this.backoffError();
     }
 
     if (this.activeRequests < this.maxConcurrentRequests) {
@@ -104,12 +124,18 @@ export class SmartThingsRequestCoordinator {
       }, this.maxQueueWaitMs);
     });
     if (!acquired) {
-      throw new Error('Timed out waiting for an available SmartThings API request slot');
+      throw new SmartThingsBackoffError('Timed out waiting for an available SmartThings API request slot');
     }
     if (this.blockedUntil > Date.now()) {
       this.releaseSlot();
-      throw new Error(`SmartThings API requests are paused for ${Math.ceil((this.blockedUntil - Date.now()) / 1000)} seconds`);
+      throw this.backoffError();
     }
+  }
+
+  private backoffError(): SmartThingsBackoffError {
+    return new SmartThingsBackoffError(
+      `SmartThings API requests are paused for ${Math.ceil((this.blockedUntil - Date.now()) / 1000)} seconds`,
+    );
   }
 
   private release(config: object): void {
@@ -144,8 +170,12 @@ export class SmartThingsRequestCoordinator {
     this.transientFailureCount++;
     const axiosError = error as axios.AxiosError;
     const retryAfter = retryAfterMilliseconds(axiosError.response?.headers?.['retry-after']);
+    const rateLimitReset = rateLimitResetMilliseconds(axiosError.response?.headers?.['x-ratelimit-reset']);
     const exponentialBackoff = Math.min(MAX_BACKOFF_MS, 1000 * Math.pow(2, Math.min(this.transientFailureCount - 1, 6)));
-    const delay = axiosError.response?.status === 429 ? Math.max(retryAfter || 30000, exponentialBackoff) : exponentialBackoff;
+    const serverBackoff = Math.min(MAX_RATE_LIMIT_BACKOFF_MS, Math.max(retryAfter || 0, rateLimitReset || 0));
+    const delay = axiosError.response?.status === 429
+      ? Math.max(serverBackoff || 30000, exponentialBackoff)
+      : exponentialBackoff;
     const newBlockedUntil = Date.now() + delay;
 
     if (newBlockedUntil > this.blockedUntil) {
@@ -163,7 +193,11 @@ export function createSmartThingsClient(config: PlatformConfig, log: Logger): ax
 
   return coordinator.attach(axios.default.create({
     baseURL: config.BaseURL,
-    headers: { 'Authorization': 'Bearer: ' + config.AccessToken },
+    headers: {
+      'Authorization': 'Bearer ' + config.AccessToken,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json;charset=utf-8',
+    },
     timeout: timeoutSeconds * 1000,
   }));
 }

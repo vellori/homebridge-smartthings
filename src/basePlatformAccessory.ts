@@ -118,7 +118,9 @@ export abstract class BasePlatformAccessory {
       this.online = true;
       this.lastStatusResult = true;
     } catch (error) {
-      this.failureCount++;
+      const authorizationFailure = axios.default.isAxiosError(error) &&
+        (error.response?.status === 401 || error.response?.status === 403);
+      this.failureCount = authorizationFailure ? 5 : this.failureCount + 1;
       this.log.error(`Failed to request status from ${this.name}: ${error}. This is failure number ${this.failureCount}`);
       if (this.failureCount >= 5 && this.online) {
         this.giveUpTime = Date.now();

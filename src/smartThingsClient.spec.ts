@@ -2,7 +2,13 @@ import assert = require('node:assert/strict');
 import test = require('node:test');
 import axios = require('axios');
 import { Logger } from 'homebridge';
-import { isTransientNetworkError, retryAfterMilliseconds, SmartThingsRequestCoordinator } from './smartThingsClient';
+import {
+  isTransientNetworkError,
+  rateLimitResetMilliseconds,
+  retryAfterMilliseconds,
+  SmartThingsBackoffError,
+  SmartThingsRequestCoordinator,
+} from './smartThingsClient';
 
 test('retryAfterMilliseconds parses seconds and HTTP dates', () => {
   assert.equal(retryAfterMilliseconds('12'), 12000);
@@ -11,11 +17,18 @@ test('retryAfterMilliseconds parses seconds and HTTP dates', () => {
   assert.equal(retryAfterMilliseconds('invalid'), undefined);
 });
 
+test('rateLimitResetMilliseconds parses SmartThings reset headers', () => {
+  assert.equal(rateLimitResetMilliseconds('772638'), 772638);
+  assert.equal(rateLimitResetMilliseconds(1500), 1500);
+  assert.equal(rateLimitResetMilliseconds('invalid'), undefined);
+});
+
 test('isTransientNetworkError identifies retryable Axios failures', () => {
   assert.equal(isTransientNetworkError({ isAxiosError: true, response: undefined }), true);
   assert.equal(isTransientNetworkError({ isAxiosError: true, response: { status: 429 } }), true);
   assert.equal(isTransientNetworkError({ isAxiosError: true, response: { status: 503 } }), true);
   assert.equal(isTransientNetworkError({ isAxiosError: true, response: { status: 401 } }), false);
+  assert.equal(isTransientNetworkError(new SmartThingsBackoffError('paused')), true);
   assert.equal(isTransientNetworkError(new Error('not axios')), false);
 });
 

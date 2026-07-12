@@ -101,15 +101,16 @@ export class IKHomeBridgeHomebridgePlatform implements DynamicPlatformPlugin {
     });
   }
 
-  getOnlineDevices(): Promise<Array<object>> {
+  async getOnlineDevices(): Promise<Array<object>> {
     this.log.debug('Discovering devices...');
-
-    const command = 'devices';
     const devices: Array<object> = [];
+    const visitedPages = new Set<string>();
+    let nextPage: string | undefined = 'devices';
 
-    return new Promise<Array<object>>((resolve, reject) => {
-
-      this.smartThingsClient.get(command).then((res) => {
+    try {
+      while (nextPage && !visitedPages.has(nextPage)) {
+        visitedPages.add(nextPage);
+        const res = await this.smartThingsClient.get(nextPage);
         res.data.items.forEach((device) => {
           if (this.config.LogDeviceData) {
             this.log.info(`SMARTTHINGS DEVICE DATA: ${JSON.stringify(device)}`);
@@ -148,13 +149,14 @@ export class IKHomeBridgeHomebridgePlatform implements DynamicPlatformPlugin {
             this.log.info(`Ignoring ${device.label} because it is in a location to ignore (${device.locationId})`);
           }
         });
-        this.log.debug('Stored all devices.');
-        resolve(devices);
-      }).catch(error => {
-        this.log.error('Error getting devices from Smartthings: ' + error);
-        reject(error);
-      });
-    });
+        nextPage = res.data._links?.next?.href;
+      }
+      this.log.debug(`Stored ${devices.length} devices from ${visitedPages.size} page(s).`);
+      return devices;
+    } catch (error) {
+      this.log.error('Error getting devices from Smartthings: ' + error);
+      throw error;
+    }
   }
 
   private async getOnlineDevicesWithRetry(): Promise<Array<object>> {
