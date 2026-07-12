@@ -16,6 +16,38 @@ This is a smartthings plugin for Homebridge.  This requires no access to the leg
 require a lot of work to install.  It will discover devices automatically as well as unregister devices that are removed
 from your smarttthings network.  This is currently under development.
 
+## Version 2.0.1
+
+This release establishes the maintained `homebridge-smerdthings` fork and focuses on safe device selection, current Homebridge compatibility, and reliable SmartThings communication.
+
+### Device filtering and configuration
+
+* Added wildcard device-ignore rules that can match SmartThings metadata including label, manufacturer, integration type, installed app, VIPER endpoint app, and device ID.
+* Added precise support for excluding every device supplied by one linked integration, such as a Hue bridge, without relying on device names.
+* Added optional device-metadata logging to help build ignore rules. Because this output contains device identifiers, it is disabled by default and should be turned off after configuring rules.
+* Added Homebridge UI editors for ignore rules, metadata logging, request timeout, and maximum concurrent requests.
+* Preserved the original `HomeBridgeSmartThings` platform name and existing configuration fields, allowing configurations from the original plugin to be reused.
+
+### Stability and SmartThings API handling
+
+* Added one shared SmartThings API client with bounded request timeouts, concurrency control, and global request pacing.
+* Limited status refreshes with a 10-second per-device cache, keeping polling below SmartThings' documented per-device request limit even when a shorter sensor interval is configured.
+* Staggered polling across the complete polling interval to prevent synchronized request bursts after startup.
+* Added exponential backoff for temporary network and server failures and support for SmartThings `X-RateLimit-Reset` and `Retry-After` headers.
+* Added bounded HomeKit characteristic reads so temporary SmartThings delays cannot block Homebridge or produce slow-handler warnings.
+* Corrected consecutive-failure tracking, offline recovery, command cooldown bookkeeping, and startup promise rejection handling.
+* Commands time out safely but are not automatically replayed, avoiding duplicate lock, door, or switch actions after an ambiguous response.
+* HTTP 401 and 403 device responses stop repeated status requests immediately while retaining low-frequency recovery checks.
+* Added retry handling for transient startup discovery failures and pagination for accounts whose device list spans multiple API pages.
+* Removed the per-device startup health-request burst and deduplicated recovery health checks.
+
+### Packaging and verification
+
+* Renamed the installable package to `homebridge-smerdthings` for independent installation while retaining compatibility with the upstream plugin's configuration identity.
+* Raised the supported Node.js baseline to Node 18 and verified the plugin on Homebridge 2 with Node.js 24.
+* Added automated tests for device filtering, retry headers, transient-error classification, concurrency limits, and bounded queue waits.
+* Audited the repository for suspicious behavior and ensured no private Homebridge configuration, access tokens, device IDs, or household device names are included.
+
 ## Fixed in version 1.5.20
 * Fixed discovery of devices issue where some fans were set up as lights
 ## Fixed in version 1.5.19
