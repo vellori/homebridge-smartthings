@@ -163,6 +163,12 @@ export class SmartThingsRequestCoordinator {
   }
 
   private recordFailure(error: unknown): void {
+    // Errors raised by the coordinator itself are control flow, not evidence of a
+    // new upstream failure. Recording one would move blockedUntil forward every
+    // time a device attempts a request during an existing pause.
+    if (error instanceof SmartThingsBackoffError) {
+      return;
+    }
     if (!isTransientNetworkError(error)) {
       return;
     }

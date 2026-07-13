@@ -2,6 +2,7 @@ import { PlatformAccessory, Logger, API, Characteristic, CharacteristicValue, Se
 import axios = require('axios');
 import { IKHomeBridgeHomebridgePlatform } from './platform';
 import { ShortEvent } from './webhook/subscriptionHandler';
+import { SmartThingsBackoffError } from './smartThingsClient';
 
 type DeviceStatus = {
   timestamp: number;
@@ -118,13 +119,17 @@ export abstract class BasePlatformAccessory {
       this.online = true;
       this.lastStatusResult = true;
     } catch (error) {
-      const authorizationFailure = axios.default.isAxiosError(error) &&
-        (error.response?.status === 401 || error.response?.status === 403);
-      this.failureCount = authorizationFailure ? 5 : this.failureCount + 1;
-      this.log.error(`Failed to request status from ${this.name}: ${error}. This is failure number ${this.failureCount}`);
-      if (this.failureCount >= 5 && this.online) {
-        this.giveUpTime = Date.now();
-        this.online = false;
+      if (error instanceof SmartThingsBackoffError) {
+        this.log.debug(`Status refresh deferred for ${this.name}: ${error.message}`);
+      } else {
+        const authorizationFailure = axios.default.isAxiosError(error) &&
+          (error.response?.status === 401 || error.response?.status === 403);
+        this.failureCount = authorizationFailure ? 5 : this.failureCount + 1;
+        this.log.error(`Failed to request status from ${this.name}: ${error}. This is failure number ${this.failureCount}`);
+        if (this.failureCount >= 5 && this.online) {
+          this.giveUpTime = Date.now();
+          this.online = false;
+        }
       }
       this.lastStatusResult = false;
     } finally {
@@ -176,7 +181,13 @@ export abstract class BasePlatformAccessory {
                   this.failureCount = 0;
                 }
               })
-              .catch(error => this.log.warn(`Could not recheck health for ${this.name}: ${error}`))
+              .catch(error => {
+                if (error instanceof SmartThingsBackoffError) {
+                  this.log.debug(`Health recheck deferred for ${this.name}: ${error.message}`);
+                } else {
+                  this.log.warn(`Could not recheck health for ${this.name}: ${error}`);
+                }
+              })
               .finally(() => this.healthCheckInProgress = false);
           }
         }

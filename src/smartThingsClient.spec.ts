@@ -56,3 +56,34 @@ test('coordinator bounds concurrency and queue waiting time', async () => {
   releaseFirst?.();
   await first;
 });
+
+test('requests attempted during backoff do not extend the original pause', async () => {
+  let dispatched = 0;
+  const warnings: string[] = [];
+  const client = axios.default.create({
+    adapter: async config => {
+      dispatched++;
+      if (dispatched === 1) {
+        throw new axios.AxiosError(
+          'temporary upstream failure',
+          'ERR_BAD_RESPONSE',
+          config,
+          undefined,
+          { data: {}, status: 503, statusText: 'Unavailable', headers: {}, config },
+        );
+      }
+      return { data: {}, status: 200, statusText: 'OK', headers: {}, config };
+    },
+  });
+  const logger = { warn: (message: string) => warnings.push(message) } as unknown as Logger;
+  new SmartThingsRequestCoordinator(1, 100, logger).attach(client);
+
+  await assert.rejects(client.get('/trigger'), /temporary upstream failure/);
+  await assert.rejects(client.get('/during-pause'), SmartThingsBackoffError);
+  await new Promise(resolve => setTimeout(resolve, 1050));
+  await client.get('/after-pause');
+
+  assert.equal(dispatched, 2);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /pausing API requests for 1 seconds/);
+});

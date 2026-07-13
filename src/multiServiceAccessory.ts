@@ -26,6 +26,7 @@ import { ThermostatService } from './services/thermostatService';
 import { StatelessProgrammableSwitchService } from './services/statelessProgrammableSwitchService';
 import { AirConditionerService } from './services/airConditionerService';
 import { Command } from './services/smartThingsCommand';
+import { SmartThingsBackoffError } from './smartThingsClient';
 
 const STATUS_CACHE_MS = 10000;
 const HOMEKIT_READ_WAIT_MS = 2000;
@@ -333,7 +334,11 @@ export class MultiServiceAccessory {
       this.online = true;
       this.lastStatusResult = true;
     } catch (error) {
-      this.recordStatusFailure(error);
+      if (error instanceof SmartThingsBackoffError) {
+        this.log.debug(`Status refresh deferred for ${this.name}: ${error.message}`);
+      } else {
+        this.recordStatusFailure(error);
+      }
       this.lastStatusResult = false;
     } finally {
       this.statusQueryInProgress = false;
@@ -408,7 +413,13 @@ export class MultiServiceAccessory {
                   this.failureCount = 0;
                 }
               })
-              .catch(error => this.log.warn(`Could not recheck health for ${this.name}: ${error}`))
+              .catch(error => {
+                if (error instanceof SmartThingsBackoffError) {
+                  this.log.debug(`Health recheck deferred for ${this.name}: ${error.message}`);
+                } else {
+                  this.log.warn(`Could not recheck health for ${this.name}: ${error}`);
+                }
+              })
               .finally(() => this.healthCheckInProgress = false);
           }
         }

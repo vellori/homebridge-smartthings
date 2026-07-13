@@ -16,6 +16,13 @@ This is a smartthings plugin for Homebridge.  This requires no access to the leg
 require a lot of work to install.  It will discover devices automatically as well as unregister devices that are removed
 from your smarttthings network.  This is currently under development.
 
+## Fixed in version 2.0.2
+
+* Fixed a feedback loop where the request coordinator treated its own intentional pause errors as new network failures, repeatedly extending a 60-second backoff until Homebridge restarted.
+* Requests deferred by a global SmartThings pause no longer increment per-device failure counters or mark otherwise healthy devices offline.
+* Deferred health recovery checks are logged only at debug level, preventing one warning per device during a global pause.
+* Added regression coverage proving requests attempted during backoff do not extend the original pause and that traffic resumes after its initial deadline.
+
 ## Version 2.0.1
 
 This release establishes the maintained `homebridge-smerdthings` fork and focuses on safe device selection, current Homebridge compatibility, and reliable SmartThings communication.

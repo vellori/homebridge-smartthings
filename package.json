@@ -2,7 +2,7 @@
   "private": false,
   "displayName": "SmerdThings Plugin",
   "name": "homebridge-smerdthings",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Connects SmartThings devices to Homebridge.  Automatically discovers devices.",
   "license": "Apache-2.0",
   "repository": {
